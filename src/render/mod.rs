@@ -54,7 +54,7 @@ pub mod graph {
 #[derive(Default)]
 pub struct MainPassNode;
 impl ViewNode for MainPassNode {
-    type ViewQuery = (&'static ViewTarget,);
+    type ViewQuery = (&'static ViewTarget,); /* TODO: Where does this come from? */
 
     fn run<'w>(
         &self,
