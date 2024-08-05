@@ -2,6 +2,17 @@
 
 Following https://sotrh.github.io/learn-wgpu/ with bevy
 
+## Dependencies and the window
+
+bevy should take care of including everything we need, so nothing to do here.
+
+##  The Surface
+
+bevy instaniates wgpu Instance, Adapter, RenderDevice, RenderQueue and the Surface.
+It also already takes care of repsonding to winit events (e.g. resize).
+
+So to realize what is implemented in render(), we need to look into bevy RenderPasses.
+
 ## License
 
 learn_bevy_wgpu is free, open source and permissively licensed!
