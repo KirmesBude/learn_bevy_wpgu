@@ -15,4 +15,5 @@ name = "tutorial1_graph_node"
 path = "src/main.rs"
 
 [dependencies]
-bevy = "0.14" # TODO: Reduce features
+# wayland is enabled, because it probably should be a default feature
+bevy = { version = "0.14", features = [ "wayland" ] }
