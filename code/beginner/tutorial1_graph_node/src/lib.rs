@@ -13,9 +13,9 @@ use bevy::{
     },
 };
 
-pub struct LearnWgpuRenderPlugin;
+pub struct Tutorial1GraphNodePlugin;
 
-impl Plugin for LearnWgpuRenderPlugin {
+impl Plugin for Tutorial1GraphNodePlugin {
     fn build(&self, app: &mut App) {
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Some(render_app) => render_app,

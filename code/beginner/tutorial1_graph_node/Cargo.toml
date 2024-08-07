@@ -1,0 +1,18 @@
+[package]
+name = "tutorial1_graph_node"
+version = "0.1.0"
+authors = ["KirmesBude <kirmesbude@gmail.com>"]
+edition = "2021"
+description = "Learn bevy render (based on learn wgpu) - Tutorial 1 Graph Node"
+repository = "https://github.com/KirmesBude/learn_bevy_wpgu"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "tutorial1_graph_node"
+path = "src/main.rs"
+
+[dependencies]
+bevy = "0.14" # TODO: Reduce features

@@ -1,7 +1,6 @@
-[package]
-name = "learn_bevy_wgpu"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-bevy = "0.14"
+[workspace]
+resolver = "2"
+members = [
+    # beginner tutorials
+    "code/beginner/*",
+]
