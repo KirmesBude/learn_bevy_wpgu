@@ -1,21 +1,17 @@
 use bevy::{
-    ecs::query::QueryItem,
     prelude::*,
     render::{
-        render_graph::{
-            NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner,
-        },
+        render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext},
         render_phase::TrackedRenderPass,
         render_resource::{
             CommandEncoderDescriptor, LoadOp, Operations, RenderPassColorAttachment,
             RenderPassDescriptor, StoreOp,
         },
         renderer::RenderContext,
-        view::ViewTarget,
+        view::ExtractedWindows,
         RenderApp,
     },
 };
-use graph::{CoreLearnWgpu, NodeLearnWgpu};
 
 pub struct LearnWgpuRenderPlugin;
 
@@ -26,24 +22,14 @@ impl Plugin for LearnWgpuRenderPlugin {
             None => return,
         };
 
-        render_app
-            .add_render_sub_graph(CoreLearnWgpu)
-            .add_render_graph_node::<ViewNodeRunner<MainPassNode>>(
-                CoreLearnWgpu,
-                NodeLearnWgpu::Main,
-            );
+        let main_pass_node = MainPassNode;
+        let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
+        render_graph.add_node(graph::NodeLearnWgpu::Main, main_pass_node);
     }
 }
 
 pub mod graph {
-    use bevy::render::render_graph::{RenderLabel, RenderSubGraph};
-
-    #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderSubGraph)]
-    pub struct CoreLearnWgpu;
-
-    pub mod input {
-        pub const VIEW_ENTITY: &str = "view_entity";
-    }
+    use bevy::render::render_graph::RenderLabel;
 
     #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
     pub enum NodeLearnWgpu {
@@ -53,16 +39,22 @@ pub mod graph {
 
 #[derive(Default)]
 pub struct MainPassNode;
-impl ViewNode for MainPassNode {
-    type ViewQuery = (&'static ViewTarget,); /* TODO: Where does this come from? */
-
+impl Node for MainPassNode {
     fn run<'w>(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext<'w>,
-        (target,): QueryItem<'w, Self::ViewQuery>,
-        _world: &'w World,
+        world: &'w World,
     ) -> Result<(), NodeRunError> {
+        let windows = world.get_resource::<ExtractedWindows>().unwrap();
+        let view = windows
+            .windows
+            .get(&windows.primary.unwrap())
+            .unwrap()
+            .swap_chain_texture_view
+            .as_ref()
+            .unwrap(); /* TODO: This needs to be cleaned up */
+
         render_context.add_command_buffer_generation_task(move |render_device| {
             // Command encoder setup
             let mut command_encoder =
@@ -74,7 +66,7 @@ impl ViewNode for MainPassNode {
             let render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("main_opaque_pass_3d"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: target.get_color_attachment().view,
+                    view,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Clear(
