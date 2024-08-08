@@ -4,12 +4,12 @@ use bevy::{
     render::{
         mesh::PrimitiveTopology,
         render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
+        render_phase::TrackedRenderPass,
         render_resource::{
             BlendState, ColorTargetState, ColorWrites, CommandEncoderDescriptor, Face,
             FragmentState, FrontFace, LoadOp, MultisampleState, Operations, PolygonMode,
-            PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
-            RenderPipelineDescriptor, SpecializedRenderPipeline, SpecializedRenderPipelines,
-            StoreOp, TextureFormat, VertexState,
+            PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
+            RenderPipelineDescriptor, StoreOp, TextureFormat, VertexState,
         },
         renderer::RenderContext,
         texture::BevyDefault,
@@ -52,7 +52,6 @@ impl Plugin for Tutorial2PipelinePlugin {
         };
 
         render_app.init_resource::<MainPipeline>();
-        render_app.init_resource::<SpecializedRenderPipelines<MainPipeline>>();
     }
 }
 
@@ -88,30 +87,35 @@ impl Node for MainPassNode {
                     label: Some("Render Encoder"),
                 });
 
-            {
-                let _render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[Some(RenderPassColorAttachment {
-                        view,
-                        resolve_target: None,
-                        ops: Operations {
-                            load: LoadOp::Clear(
-                                LinearRgba {
-                                    red: 0.1,
-                                    green: 0.2,
-                                    blue: 0.3,
-                                    alpha: 1.0,
-                                }
-                                .into(),
-                            ),
-                            store: StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
+            let render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(
+                            LinearRgba {
+                                red: 0.1,
+                                green: 0.2,
+                                blue: 0.3,
+                                alpha: 1.0,
+                            }
+                            .into(),
+                        ),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            let mut tracked_render_pass = TrackedRenderPass::new(&render_device, render_pass);
+            if let Some(render_pipeline) = world.get_resource::<MainPipeline>() {
+                tracked_render_pass.set_render_pipeline(&render_pipeline.pipeline);
+                tracked_render_pass.draw(0..3, 0..1);
             }
+            drop(tracked_render_pass);
 
             // No need to submit the command to the queue, because bevy will first batch them and queue them all together.
             // Bevy will also take care of presenting to the texture.
@@ -127,14 +131,14 @@ impl Node for MainPassNode {
 pub const SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(307062806978783518533214479195188549290);
 
-#[derive(Default, Clone, Resource)]
-pub struct MainPipeline;
+#[derive(Clone, Resource)]
+pub struct MainPipeline {
+    pub pipeline: RenderPipeline,
+}
 
-impl SpecializedRenderPipeline for MainPipeline {
-    type Key = ();
-
-    fn specialize(&self, _key: Self::Key) -> RenderPipelineDescriptor {
-        RenderPipelineDescriptor {
+impl FromWorld for MainPipeline {
+    fn from_world(_world: &mut World) -> Self {
+        let _render_pipeline_descriptor = RenderPipelineDescriptor {
             label: Some("Render Pipeline Layout".into()),
             layout: vec![],
             push_constant_ranges: vec![],
@@ -173,6 +177,8 @@ impl SpecializedRenderPipeline for MainPipeline {
                 mask: !0,                         // 3.
                 alpha_to_coverage_enabled: false, // 4.
             },
-        }
+        };
+
+        todo!()
     }
 }
