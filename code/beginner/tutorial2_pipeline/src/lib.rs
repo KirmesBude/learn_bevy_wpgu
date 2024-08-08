@@ -1,12 +1,18 @@
 use bevy::{
+    asset::load_internal_asset,
     prelude::*,
     render::{
+        mesh::PrimitiveTopology,
         render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_resource::{
-            CommandEncoderDescriptor, LoadOp, Operations, RenderPassColorAttachment,
-            RenderPassDescriptor, StoreOp,
+            BlendState, ColorTargetState, ColorWrites, CommandEncoderDescriptor, Face,
+            FragmentState, FrontFace, LoadOp, MultisampleState, Operations, PolygonMode,
+            PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
+            RenderPipelineDescriptor, SpecializedRenderPipeline, SpecializedRenderPipelines,
+            StoreOp, TextureFormat, VertexState,
         },
         renderer::RenderContext,
+        texture::BevyDefault,
         view::ExtractedWindows,
         RenderApp,
     },
@@ -18,6 +24,8 @@ pub struct Tutorial2PipelinePlugin;
 
 impl Plugin for Tutorial2PipelinePlugin {
     fn build(&self, app: &mut App) {
+        load_internal_asset!(app, SHADER_HANDLE, "shader.wgsl", Shader::from_wgsl);
+
         // Bevy splits up your usual logic world and the render world to allow for things such as pipelined rendering.
         // Later tutorials will go into more depth on how those two interact with each other.
         // For now everything we care about happens on the RenderApp and we do not need anything from the usual logic world.
@@ -35,6 +43,16 @@ impl Plugin for Tutorial2PipelinePlugin {
         let main_pass_node = MainPassNode;
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(MainPassNodeLabel, main_pass_node);
+    }
+
+    fn finish(&self, app: &mut App) {
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Some(render_app) => render_app,
+            None => return,
+        };
+
+        render_app.init_resource::<MainPipeline>();
+        render_app.init_resource::<SpecializedRenderPipelines<MainPipeline>>();
     }
 }
 
@@ -101,5 +119,60 @@ impl Node for MainPassNode {
         });
 
         Ok(())
+    }
+}
+
+// Tutorial 2
+
+pub const SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(307062806978783518533214479195188549290);
+
+#[derive(Default, Clone, Resource)]
+pub struct MainPipeline;
+
+impl SpecializedRenderPipeline for MainPipeline {
+    type Key = ();
+
+    fn specialize(&self, _key: Self::Key) -> RenderPipelineDescriptor {
+        RenderPipelineDescriptor {
+            label: Some("Render Pipeline Layout".into()),
+            layout: vec![],
+            push_constant_ranges: vec![],
+            vertex: VertexState {
+                shader: SHADER_HANDLE,
+                shader_defs: vec![],
+                entry_point: "vs_main".into(),
+                buffers: vec![],
+            },
+            fragment: Some(FragmentState {
+                shader: SHADER_HANDLE,
+                shader_defs: vec![],
+                entry_point: "fs_main".into(),
+                targets: vec![Some(ColorTargetState {
+                    // 4.
+                    format: TextureFormat::bevy_default(),
+                    blend: Some(BlendState::REPLACE),
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState {
+                topology: PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: FrontFace::Ccw,
+                cull_mode: Some(Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: MultisampleState {
+                count: 1,                         // 2.
+                mask: !0,                         // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },
+        }
     }
 }
