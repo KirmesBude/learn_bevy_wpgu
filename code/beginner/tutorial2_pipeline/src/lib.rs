@@ -6,10 +6,7 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_phase::TrackedRenderPass,
         render_resource::{
-            BlendState, ColorTargetState, ColorWrites, CommandEncoderDescriptor, Face,
-            FragmentState, FrontFace, LoadOp, MultisampleState, Operations, PolygonMode,
-            PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
-            RenderPipelineDescriptor, StoreOp, TextureFormat, VertexState,
+            BlendState, CachedRenderPipelineId, ColorTargetState, ColorWrites, CommandEncoderDescriptor, Face, FragmentState, FrontFace, LoadOp, MultisampleState, Operations, PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StoreOp, TextureFormat, VertexState
         },
         renderer::RenderContext,
         texture::BevyDefault,
@@ -111,8 +108,10 @@ impl Node for MainPassNode {
             });
 
             let mut tracked_render_pass = TrackedRenderPass::new(&render_device, render_pass);
-            if let Some(render_pipeline) = world.get_resource::<MainPipeline>() {
-                tracked_render_pass.set_render_pipeline(&render_pipeline.pipeline);
+            let main_pipeline = world.resource::<MainPipeline>();
+            let pipeline_cache = world.resource::<PipelineCache>();
+            if let Some(pipeline) = pipeline_cache.get_render_pipeline(main_pipeline.pipeline) {
+                tracked_render_pass.set_render_pipeline(pipeline);
                 tracked_render_pass.draw(0..3, 0..1);
             }
             drop(tracked_render_pass);
@@ -133,12 +132,12 @@ pub const SHADER_HANDLE: Handle<Shader> =
 
 #[derive(Clone, Resource)]
 pub struct MainPipeline {
-    pub pipeline: RenderPipeline,
+    pub pipeline: CachedRenderPipelineId,
 }
 
 impl FromWorld for MainPipeline {
-    fn from_world(_world: &mut World) -> Self {
-        let _render_pipeline_descriptor = RenderPipelineDescriptor {
+    fn from_world(world: &mut World) -> Self {
+        let render_pipeline_descriptor = RenderPipelineDescriptor {
             label: Some("Render Pipeline Layout".into()),
             layout: vec![],
             push_constant_ranges: vec![],
@@ -154,7 +153,7 @@ impl FromWorld for MainPipeline {
                 entry_point: "fs_main".into(),
                 targets: vec![Some(ColorTargetState {
                     // 4.
-                    format: TextureFormat::bevy_default(),
+                    format: TextureFormat::Bgra8UnormSrgb,
                     blend: Some(BlendState::REPLACE),
                     write_mask: ColorWrites::ALL,
                 })],
@@ -179,6 +178,9 @@ impl FromWorld for MainPipeline {
             },
         };
 
-        todo!()
+        let pipeline_cache = world.resource_mut::<PipelineCache>();
+        Self {
+            pipeline: pipeline_cache.queue_render_pipeline(render_pipeline_descriptor),
+        }
     }
 }
