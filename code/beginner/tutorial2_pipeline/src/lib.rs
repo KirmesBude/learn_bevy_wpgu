@@ -6,10 +6,12 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_phase::TrackedRenderPass,
         render_resource::{
-            BlendState, CachedRenderPipelineId, ColorTargetState, ColorWrites, CommandEncoderDescriptor, Face, FragmentState, FrontFace, LoadOp, MultisampleState, Operations, PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, StoreOp, TextureFormat, VertexState
+            BlendState, CachedRenderPipelineId, ColorTargetState, ColorWrites,
+            CommandEncoderDescriptor, Face, FragmentState, FrontFace, LoadOp, MultisampleState,
+            Operations, PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
+            RenderPassDescriptor, RenderPipelineDescriptor, StoreOp, TextureFormat, VertexState,
         },
         renderer::RenderContext,
-        texture::BevyDefault,
         view::ExtractedWindows,
         RenderApp,
     },
