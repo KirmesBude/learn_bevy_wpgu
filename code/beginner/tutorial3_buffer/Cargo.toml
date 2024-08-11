@@ -1,9 +1,9 @@
 [package]
-name = "tutorial2_pipeline"
+name = "tutorial3_buffer"
 version = "0.1.0"
 authors = ["KirmesBude <kirmesbude@gmail.com>"]
 edition = "2021"
-description = "Learn bevy render (based on learn wgpu) - Tutorial 2 Pipeline"
+description = "Learn bevy render (based on learn wgpu) - Tutorial 3 Buffer"
 repository = "https://github.com/KirmesBude/learn_bevy_wpgu"
 license = "MIT OR Apache-2.0"
 
@@ -11,9 +11,10 @@ license = "MIT OR Apache-2.0"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "tutorial2_pipeline"
+name = "tutorial3_buffer"
 path = "src/main.rs"
 
 [dependencies]
 # wayland is enabled, because it probably should be a default feature
 bevy = { version = "0.14", features = [ "wayland" ] }
+bytemuck = { version = "1.16.3", features = ["derive"] }
