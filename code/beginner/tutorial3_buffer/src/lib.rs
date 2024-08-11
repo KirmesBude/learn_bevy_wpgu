@@ -8,8 +8,8 @@ use bevy::{
         render_phase::TrackedRenderPass,
         render_resource::{
             BlendState, BufferUsages, CachedRenderPipelineId, ColorTargetState, ColorWrites,
-            CommandEncoderDescriptor, Face, FragmentState, FrontFace, LoadOp, MultisampleState,
-            Operations, PipelineCache, PolygonMode, PrimitiveState, RawBufferVec,
+            CommandEncoderDescriptor, Face, FragmentState, FrontFace, IndexFormat, LoadOp,
+            MultisampleState, Operations, PipelineCache, PolygonMode, PrimitiveState, RawBufferVec,
             RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor, StoreOp,
             TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
             VertexStepMode,
@@ -128,10 +128,18 @@ impl Node for MainPassNode {
             let main_pipeline = world.resource::<MainPipeline>();
             let pipeline_cache = world.resource::<PipelineCache>();
             if let Some(pipeline) = pipeline_cache.get_render_pipeline(main_pipeline.pipeline) {
-                tracked_render_pass
-                    .set_vertex_buffer(0, main_pipeline.vertices.buffer().unwrap().slice(..));
                 tracked_render_pass.set_render_pipeline(pipeline);
-                tracked_render_pass.draw(0..main_pipeline.num_vertices, 0..1);
+
+                let vertices = &main_pipeline.vertices;
+                let indices = &main_pipeline.indices;
+                tracked_render_pass.set_vertex_buffer(0, vertices.buffer().unwrap().slice(..));
+                tracked_render_pass.set_index_buffer(
+                    indices.buffer().unwrap().slice(..),
+                    0,
+                    IndexFormat::Uint16,
+                );
+                tracked_render_pass.draw_indexed(0..(indices.len() as u32) - 1, 0, 0..1);
+                // TODO: -1, because extra u16 at the end for padding
             }
             drop(tracked_render_pass);
 
@@ -148,7 +156,7 @@ impl Node for MainPassNode {
 pub struct MainPipeline {
     pub pipeline: CachedRenderPipelineId,
     pub vertices: RawBufferVec<Vertex>,
-    pub num_vertices: u32,
+    pub indices: RawBufferVec<u16>,
 }
 
 // From world allows automatic initialization at creation time with the whole world available.
@@ -196,18 +204,24 @@ impl FromWorld for MainPipeline {
 
         let render_device = world.resource::<RenderDevice>();
         let render_queue = world.resource::<RenderQueue>();
+
         let mut vbo = RawBufferVec::new(BufferUsages::VERTEX);
+        let mut ibo = RawBufferVec::new(BufferUsages::INDEX);
         for vertex in VERTICES {
             vbo.push(*vertex);
         }
+        for index in INDICES {
+            ibo.push(*index);
+        }
         vbo.write_buffer(render_device, render_queue);
+        ibo.write_buffer(render_device, render_queue);
 
         // This takes care of asynchronously creating the render pipeline from the descriptor.
         let pipeline_cache = world.resource_mut::<PipelineCache>();
         Self {
             pipeline: pipeline_cache.queue_render_pipeline(render_pipeline_descriptor),
             vertices: vbo,
-            num_vertices: VERTICES.len() as u32,
+            indices: ibo,
         }
     }
 }
@@ -219,20 +233,31 @@ pub struct Vertex {
     pub color: [f32; 3],
 }
 
+// lib.rs
 const VERTICES: &[Vertex] = &[
     Vertex {
-        position: [0.0, 0.5, 0.0],
-        color: [1.0, 0.0, 0.0],
-    },
+        position: [-0.0868241, 0.49240386, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // A
     Vertex {
-        position: [-0.5, -0.5, 0.0],
-        color: [0.0, 1.0, 0.0],
-    },
+        position: [-0.49513406, 0.06958647, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // B
     Vertex {
-        position: [0.5, -0.5, 0.0],
-        color: [0.0, 0.0, 1.0],
-    },
+        position: [-0.21918549, -0.44939706, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // C
+    Vertex {
+        position: [0.35966998, -0.3473291, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // D
+    Vertex {
+        position: [0.44147372, 0.2347359, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // E
 ];
+
+const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, 0]; // TODO: This needed padding to be 4Byte aligned
 
 impl Vertex {
     fn desc() -> VertexBufferLayout {
