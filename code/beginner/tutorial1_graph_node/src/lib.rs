@@ -1,6 +1,7 @@
 use bevy::{
     prelude::*,
     render::{
+        graph::CameraDriverLabel,
         render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_resource::{
             CommandEncoderDescriptor, LoadOp, Operations, RenderPassColorAttachment,
@@ -35,6 +36,8 @@ impl Plugin for Tutorial1GraphNodePlugin {
         let main_pass_node = MainPassNode;
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(MainPassNodeLabel, main_pass_node);
+        // It is necessary to ensure our Node is run after the CameraDriverNode, because it may also write to the view texture.
+        render_graph.add_node_edge(CameraDriverLabel, MainPassNodeLabel);
     }
 }
 

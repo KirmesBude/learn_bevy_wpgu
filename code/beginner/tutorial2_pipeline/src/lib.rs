@@ -2,6 +2,7 @@ use bevy::{
     asset::load_internal_asset,
     prelude::*,
     render::{
+        graph::CameraDriverLabel,
         mesh::PrimitiveTopology,
         render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_phase::TrackedRenderPass,
@@ -20,6 +21,11 @@ use bevy::{
 // You can easily organize your code with plugins in bevy, so that is what we are doing here.
 // As a plugin we can interact with App to get everything we need.
 pub struct Tutorial2PipelinePlugin;
+
+// This together with load_internal_asset allows us to include the shader at compile time.
+// That way we do not have to interface with bevy_asset and we can be sure the shader is available immediately.
+pub const SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(307062806978783518533214479195188549290);
 
 impl Plugin for Tutorial2PipelinePlugin {
     fn build(&self, app: &mut App) {
@@ -42,6 +48,8 @@ impl Plugin for Tutorial2PipelinePlugin {
         let main_pass_node = MainPassNode;
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(MainPassNodeLabel, main_pass_node);
+        // It is necessary to ensure our Node is run after the CameraDriverNode, because it may also write to the view texture.
+        render_graph.add_node_edge(CameraDriverLabel, MainPassNodeLabel);
     }
 
     fn finish(&self, app: &mut App) {
@@ -50,6 +58,7 @@ impl Plugin for Tutorial2PipelinePlugin {
             None => return,
         };
 
+        // This needs access to RenderDevice at creation time, so it needs to be done in finish.
         render_app.init_resource::<MainPipeline>();
     }
 }
@@ -109,7 +118,10 @@ impl Node for MainPassNode {
                 occlusion_query_set: None,
             });
 
+            // Tracked Render Pass is not stricly necessary, but the more idiomatic choice
             let mut tracked_render_pass = TrackedRenderPass::new(&render_device, render_pass);
+            // We have previously created a RenderPipeline in MainPipeline via PipelineCache, so we need to retrieve it here.
+            // Since pipeline creaton via PipelineCache is async, it might not be available from the very start.
             let main_pipeline = world.resource::<MainPipeline>();
             let pipeline_cache = world.resource::<PipelineCache>();
             if let Some(pipeline) = pipeline_cache.get_render_pipeline(main_pipeline.pipeline) {
@@ -127,16 +139,12 @@ impl Node for MainPassNode {
     }
 }
 
-// Tutorial 2
-
-pub const SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(307062806978783518533214479195188549290);
-
 #[derive(Clone, Resource)]
 pub struct MainPipeline {
     pub pipeline: CachedRenderPipelineId,
 }
 
+// From world allows automatic initialization at creation time with the whole world available.
 impl FromWorld for MainPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_pipeline_descriptor = RenderPipelineDescriptor {
@@ -154,8 +162,7 @@ impl FromWorld for MainPipeline {
                 shader_defs: vec![],
                 entry_point: "fs_main".into(),
                 targets: vec![Some(ColorTargetState {
-                    // 4.
-                    format: TextureFormat::Bgra8UnormSrgb,
+                    format: TextureFormat::Bgra8UnormSrgb, // TODO: This needs to be the same as SurfaceTexture, but I can not retrieve it at this point
                     blend: Some(BlendState::REPLACE),
                     write_mask: ColorWrites::ALL,
                 })],
@@ -174,12 +181,13 @@ impl FromWorld for MainPipeline {
             },
             depth_stencil: None,
             multisample: MultisampleState {
-                count: 1,                         // 2.
-                mask: !0,                         // 3.
-                alpha_to_coverage_enabled: false, // 4.
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
             },
         };
 
+        // This takes care of asynchronously creating the render pipeline from the descriptor.
         let pipeline_cache = world.resource_mut::<PipelineCache>();
         Self {
             pipeline: pipeline_cache.queue_render_pipeline(render_pipeline_descriptor),
