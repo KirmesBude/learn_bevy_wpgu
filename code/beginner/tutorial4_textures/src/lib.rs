@@ -20,7 +20,7 @@ use bevy::{
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
         view::ExtractedWindows,
-        RenderApp,
+        Extract, RenderApp,
     },
 };
 use bytemuck::{Pod, Zeroable};
@@ -46,6 +46,9 @@ impl Plugin for Tutorial4Textures {
             Some(render_app) => render_app,
             None => return,
         };
+
+        render_app.init_resource::<MyExtractedTexture>();
+        render_app.add_systems(ExtractSchedule, extract_my_texture);
 
         // In wgpu we need to set up some stuff so the RenderPassDescriptor that we create is actually "run".
         // Bevy has built RenderGraphs on top. They are acyclic graphs that define Nodes that can connect to other Nodes.
@@ -125,7 +128,8 @@ impl Node for MainPassNode {
             // backend.
             view_formats: &[],
         });
-        let extracted_image = vec![0; (4 * texture_size.width * texture_size.height) as usize];
+        // TODO: This actually contains a lot of what I need.
+        let extracted_image = world.resource::<MyExtractedTexture>().0.data.clone();
         let render_queue = world.resource::<RenderQueue>();
         render_queue.write_texture(
             // Tells wgpu where to copy the pixel data
@@ -430,9 +434,22 @@ pub struct MyTexture(pub Handle<Image>);
 impl FromWorld for MyTexture {
     fn from_world(world: &mut World) -> Self {
         let asset_server = world.resource::<AssetServer>();
-
+        println!("Loading image");
         Self(asset_server.load("bevy+wgpu.png"))
     }
 }
 
-// TODO: This needs to be extracted somehow
+#[derive(Debug, Default, Resource)]
+pub struct MyExtractedTexture(pub Image);
+
+// TODO: Change to asset events
+pub fn extract_my_texture(
+    my_texture: Extract<Res<MyTexture>>,
+    images: Extract<Res<Assets<Image>>>,
+    mut my_extracted_texture: ResMut<MyExtractedTexture>,
+) {
+    if let Some(image) = images.get(&my_texture.0) {
+        println!("Extracting image");
+        my_extracted_texture.0 = image.clone();
+    }
+}
