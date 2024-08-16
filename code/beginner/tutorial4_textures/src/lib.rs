@@ -7,18 +7,18 @@ use bevy::{
         render_graph::{Node, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
         render_phase::TrackedRenderPass,
         render_resource::{
-            AddressMode, BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource,
-            BindingType, BlendState, BufferUsages, CachedRenderPipelineId, ColorTargetState,
-            ColorWrites, CommandEncoderDescriptor, Extent3d, Face, FilterMode, FragmentState,
-            FrontFace, ImageCopyTexture, ImageDataLayout, IndexFormat, LoadOp, MultisampleState,
-            Operations, Origin3d, PipelineCache, PolygonMode, PrimitiveState, RawBufferVec,
-            RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-            SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp, TextureAspect,
-            TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-            TextureViewDescriptor, TextureViewDimension, VertexAttribute, VertexBufferLayout,
-            VertexFormat, VertexState, VertexStepMode,
+            BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, BindingResource, BindingType,
+            BlendState, BufferUsages, CachedRenderPipelineId, ColorTargetState, ColorWrites,
+            CommandEncoderDescriptor, Face, FragmentState, FrontFace, ImageCopyTexture,
+            ImageDataLayout, IndexFormat, LoadOp, MultisampleState, Operations, Origin3d,
+            PipelineCache, PolygonMode, PrimitiveState, RawBufferVec, RenderPassColorAttachment,
+            RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType, ShaderStages,
+            StoreOp, TextureAspect, TextureFormat, TextureSampleType, TextureViewDescriptor,
+            TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexFormat, VertexState,
+            VertexStepMode,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
+        texture::{ImageSampler, ImageSamplerDescriptor},
         view::ExtractedWindows,
         Extract, RenderApp,
     },
@@ -98,38 +98,27 @@ impl Node for MainPassNode {
             return Ok(());
         };
 
-        // TODO: queue up extracted texture image data
-        // TODO: This is a copy from another place :/
+        // Image stuff
+        let extracted_image = world.resource::<MyExtractedTexture>().0.clone();
+
         let render_device = world.resource::<RenderDevice>();
-        let texture_size = Extent3d {
-            width: 256,
-            height: 256,
-            depth_or_array_layers: 1,
+        let diffuse_texture = render_device.create_texture(&extracted_image.texture_descriptor);
+
+        let diffuse_texture_view = diffuse_texture.create_view(
+            &extracted_image
+                .texture_view_descriptor
+                .as_ref()
+                .unwrap_or(&TextureViewDescriptor::default()),
+        );
+        let diffuse_sampler_descriptor = match &extracted_image.sampler {
+            ImageSampler::Default => &ImageSamplerDescriptor::linear(), // TODO: workaround to do the same thing as ImagePlugin
+            ImageSampler::Descriptor(descriptor) => descriptor,
         };
-        let diffuse_texture = render_device.create_texture(&TextureDescriptor {
-            // All textures are stored as 3D, we represent our 2D texture
-            // by setting depth to 1.
-            size: texture_size,
-            mip_level_count: 1, // We'll talk about this a little later
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            // Most images are stored using sRGB, so we need to reflect that here.
-            format: TextureFormat::Rgba8UnormSrgb,
-            // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
-            // COPY_DST means that we want to copy data to this texture
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            label: Some("diffuse_texture"),
-            // This is the same as with the SurfaceConfig. It
-            // specifies what texture formats can be used to
-            // create TextureViews for this texture. The base
-            // texture format (Rgba8UnormSrgb in this case) is
-            // always supported. Note that using a different
-            // texture format is not supported on the WebGL2
-            // backend.
-            view_formats: &[],
-        });
-        // TODO: This actually contains a lot of what I need.
-        let extracted_image = world.resource::<MyExtractedTexture>().0.data.clone();
+        let diffuse_sampler = render_device.create_sampler(&diffuse_sampler_descriptor.as_wgpu());
+        let image_data = extracted_image.data.clone();
+
+        let texture_size = extracted_image.texture_descriptor.size;
+
         let render_queue = world.resource::<RenderQueue>();
         render_queue.write_texture(
             // Tells wgpu where to copy the pixel data
@@ -140,7 +129,7 @@ impl Node for MainPassNode {
                 aspect: TextureAspect::All,
             },
             // The actual pixel data
-            &extracted_image,
+            &image_data,
             // The layout of the texture
             ImageDataLayout {
                 offset: 0,
@@ -186,13 +175,27 @@ impl Node for MainPassNode {
             // We have previously created a RenderPipeline in MainPipeline via PipelineCache, so we need to retrieve it here.
             // Since pipeline creaton via PipelineCache is async, it might not be available from the very start.
             let main_pipeline = world.resource::<MainPipeline>();
+            let texture_bind_group_layout = &main_pipeline.texture_bind_group_layout;
+            let diffuse_bind_group = render_device.create_bind_group(
+                Some("diffuse_bind_group"),
+                texture_bind_group_layout,
+                &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&diffuse_texture_view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::Sampler(&diffuse_sampler),
+                    },
+                ],
+            );
             let pipeline_cache = world.resource::<PipelineCache>();
             if let Some(pipeline) = pipeline_cache.get_render_pipeline(main_pipeline.pipeline) {
                 tracked_render_pass.set_render_pipeline(pipeline);
 
-                // TODO: This contains the texture size, which is not known at pipeline creation time :/
-                let diffuse_bind_group = &main_pipeline.diffuse_bind_group;
-                tracked_render_pass.set_bind_group(0, diffuse_bind_group, &[]);
+                // Lifetime issue with diffuse_bind_group
+                tracked_render_pass.set_bind_group(0, &diffuse_bind_group, &[]);
 
                 let vertices = &main_pipeline.vertices;
                 let indices = &main_pipeline.indices;
@@ -221,7 +224,7 @@ pub struct MainPipeline {
     pub pipeline: CachedRenderPipelineId,
     pub vertices: RawBufferVec<Vertex>,
     pub indices: RawBufferVec<u16>,
-    pub diffuse_bind_group: BindGroup,
+    pub texture_bind_group_layout: BindGroupLayout,
 }
 
 // From world allows automatic initialization at creation time with the whole world available.
@@ -231,47 +234,6 @@ impl FromWorld for MainPipeline {
         let render_queue = world.resource::<RenderQueue>();
 
         // Texture bind group
-        // TODO: This needs to be dynamic depending on the actual texture
-        let texture_size = Extent3d {
-            width: 256,
-            height: 256,
-            depth_or_array_layers: 1,
-        };
-        let diffuse_texture = render_device.create_texture(&TextureDescriptor {
-            // All textures are stored as 3D, we represent our 2D texture
-            // by setting depth to 1.
-            size: texture_size,
-            mip_level_count: 1, // We'll talk about this a little later
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            // Most images are stored using sRGB, so we need to reflect that here.
-            format: TextureFormat::Rgba8UnormSrgb,
-            // TEXTURE_BINDING tells wgpu that we want to use this texture in shaders
-            // COPY_DST means that we want to copy data to this texture
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            label: Some("diffuse_texture"),
-            // This is the same as with the SurfaceConfig. It
-            // specifies what texture formats can be used to
-            // create TextureViews for this texture. The base
-            // texture format (Rgba8UnormSrgb in this case) is
-            // always supported. Note that using a different
-            // texture format is not supported on the WebGL2
-            // backend.
-            view_formats: &[],
-        });
-
-        let diffuse_texture_view = diffuse_texture.create_view(&TextureViewDescriptor::default());
-
-        let diffuse_sampler = render_device.create_sampler(&SamplerDescriptor {
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
-            ..Default::default()
-        });
-
         let texture_bind_group_layout = render_device.create_bind_group_layout(
             Some("texture_bind_group_layout"),
             &[
@@ -296,24 +258,9 @@ impl FromWorld for MainPipeline {
             ],
         );
 
-        let diffuse_bind_group = render_device.create_bind_group(
-            Some("diffuse_bind_group"),
-            &texture_bind_group_layout,
-            &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&diffuse_texture_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&diffuse_sampler),
-                },
-            ],
-        );
-
         let render_pipeline_descriptor = RenderPipelineDescriptor {
             label: Some("Render Pipeline Layout".into()),
-            layout: vec![texture_bind_group_layout],
+            layout: vec![texture_bind_group_layout.clone()],
             push_constant_ranges: vec![],
             vertex: VertexState {
                 shader: SHADER_HANDLE,
@@ -369,7 +316,7 @@ impl FromWorld for MainPipeline {
             pipeline: pipeline_cache.queue_render_pipeline(render_pipeline_descriptor),
             vertices: vbo,
             indices: ibo,
-            diffuse_bind_group,
+            texture_bind_group_layout,
         }
     }
 }
