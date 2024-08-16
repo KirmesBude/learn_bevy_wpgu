@@ -1,0 +1,20 @@
+[package]
+name = "tutorial4_textures"
+version = "0.1.0"
+authors = ["KirmesBude <kirmesbude@gmail.com>"]
+edition = "2021"
+description = "Learn bevy render (based on learn wgpu) - Tutorial 3 Textures"
+repository = "https://github.com/KirmesBude/learn_bevy_wpgu"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "tutorial4_textures"
+path = "src/main.rs"
+
+[dependencies]
+# wayland is enabled, because it probably should be a default feature
+bevy = { version = "0.14", features = [ "wayland" ] }
+bytemuck = { version = "1.16.3", features = ["derive"] }

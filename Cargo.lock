@@ -3624,6 +3624,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tutorial4_textures"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bytemuck",
+]
+
+[[package]]
 name = "twox-hash"
 version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
